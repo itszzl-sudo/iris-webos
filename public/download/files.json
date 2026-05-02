@@ -1,0 +1,35 @@
+{
+  "files": [
+    {
+      "name": "iris-wasm-llm.wasm",
+      "version": "v1.0.0",
+      "size": 15,
+      "unit": "MB",
+      "updatedAt": "2025-05-02",
+      "path": "/wasm/iris-wasm-llm.wasm",
+      "type": "wasm",
+      "description": "Iris本地LLM WASM模块（演示文件）"
+    },
+    {
+      "name": "config-templates.zip",
+      "version": "v1.0.0",
+      "size": 2,
+      "unit": "KB",
+      "updatedAt": "2025-05-02",
+      "path": "/download/config-templates.zip",
+      "type": "zip",
+      "description": "配置模板文件包（演示文件）"
+    },
+    {
+      "name": "iris-source.tar.gz",
+      "version": "v1.0.0",
+      "size": 8,
+      "unit": "MB",
+      "updatedAt": "2025-05-02",
+      "path": "/download/iris-source.tar.gz",
+      "type": "tar.gz",
+      "description": "源码包（演示文件）"
+    }
+  ],
+  "lastUpdate": "2025-05-02"
+}
