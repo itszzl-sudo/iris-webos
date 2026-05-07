@@ -25,6 +25,7 @@ import WindowManager from './components/WindowManager.vue'
 import { systemManager } from './core/system.js'
 import { webContainerManager } from './wasi/webcontainer.js'
 import { clipboardManager } from './core/clipboard.js'
+import { selectionManager } from './core/selection.js'
 
 const theme = ref('dark')
 const webcontainerStatus = ref('idle')
@@ -60,6 +61,7 @@ onMounted(async () => {
   })
   
   clipboardManager.setEventBus(systemManager.eventBus)
+  selectionManager.setEventBus(systemManager.eventBus)
   
   document.addEventListener('copy', async (e) => {
     const selection = window.getSelection()

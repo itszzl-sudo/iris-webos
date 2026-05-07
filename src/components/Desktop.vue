@@ -113,11 +113,12 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { desktopManager } from '../core/desktop.js'
 import { windowManager } from '../core/window-manager.js'
 import { webContainerManager } from '../wasi/webcontainer.js'
 import { clipboardManager } from '../core/clipboard.js'
+import { selectionManager } from '../core/selection.js'
 import ContextMenu from './ContextMenu.vue'
 
 const props = defineProps({
@@ -151,11 +152,98 @@ const progressPercent = computed(() => {
   return (props.webcontainerProgress.step / props.webcontainerProgress.total) * 100
 })
 
+const contextMenuType = ref('desktop')
+
 const handleContextMenu = (e) => {
-  const menuItems = [
-    { label: '刷新桌面', action: () => location.reload() },
-    { type: 'separator' }
-  ]
+  const hasSelection = selectionManager.hasSelection()
+  const selectedText = selectionManager.getSelection()
+  const editableElement = selectionManager.getEditableElement()
+  const isEditable = !!editableElement
+  
+  const menuItems = []
+  
+  if (hasSelection) {
+    const preview = selectedText.length > 20 
+      ? selectedText.substring(0, 20) + '...' 
+      : selectedText
+    menuItems.push({
+      label: `复制 "${preview}"`,
+      action: async () => {
+        await clipboardManager.copy(selectedText)
+      }
+    })
+    
+    if (isEditable) {
+      menuItems.push({
+        label: '剪切',
+        action: async () => {
+          await clipboardManager.copy(selectedText)
+          if (editableElement.tagName === 'INPUT' || editableElement.tagName === 'TEXTAREA') {
+            const start = editableElement.selectionStart
+            const end = editableElement.selectionEnd
+            editableElement.value = editableElement.value.substring(0, start) + 
+                                   editableElement.value.substring(end)
+            editableElement.selectionStart = editableElement.selectionEnd = start
+          } else if (editableElement.isContentEditable) {
+            document.execCommand('cut')
+          }
+        }
+      })
+    }
+  }
+  
+  if (isEditable) {
+    menuItems.push({
+      label: '粘贴',
+      action: async () => {
+        const text = await clipboardManager.paste()
+        if (text) {
+          if (editableElement.tagName === 'INPUT' || editableElement.tagName === 'TEXTAREA') {
+            const start = editableElement.selectionStart
+            const end = editableElement.selectionEnd
+            editableElement.value = editableElement.value.substring(0, start) + 
+                                   text + 
+                                   editableElement.value.substring(end)
+            editableElement.selectionStart = editableElement.selectionEnd = start + text.length
+            editableElement.dispatchEvent(new Event('input', { bubbles: true }))
+          } else if (editableElement.isContentEditable) {
+            document.execCommand('insertText', false, text)
+          }
+        }
+      }
+    })
+    
+    if (hasSelection) {
+      menuItems.push({
+        label: '删除',
+        action: () => {
+          if (editableElement.tagName === 'INPUT' || editableElement.tagName === 'TEXTAREA') {
+            const start = editableElement.selectionStart
+            const end = editableElement.selectionEnd
+            editableElement.value = editableElement.value.substring(0, start) + 
+                                   editableElement.value.substring(end)
+            editableElement.selectionStart = editableElement.selectionEnd = start
+            editableElement.dispatchEvent(new Event('input', { bubbles: true }))
+          } else if (editableElement.isContentEditable) {
+            document.execCommand('delete')
+          }
+        }
+      })
+    }
+    
+    menuItems.push({
+      label: '全选',
+      action: () => {
+        selectionManager.selectAll(editableElement)
+      }
+    })
+  }
+  
+  if (menuItems.length > 0) {
+    menuItems.push({ type: 'separator' })
+  }
+  
+  menuItems.push({ label: '刷新桌面', action: () => location.reload() })
   
   if (clipboardManager.hasFile()) {
     const fileInfo = clipboardManager.getFileInfo()
@@ -225,6 +313,79 @@ const handleIconDoubleClick = (icon) => {
     title: icon.name
   })
 }
+
+const handleKeyDown = async (e) => {
+  if (!e.ctrlKey && !e.metaKey) return
+  
+  const key = e.key.toLowerCase()
+  const editableElement = selectionManager.getEditableElement()
+  const isEditable = !!editableElement
+  
+  switch (key) {
+    case 'c':
+      if (selectionManager.hasSelection()) {
+        e.preventDefault()
+        await clipboardManager.copy(selectionManager.getSelection())
+      }
+      break
+      
+    case 'x':
+      if (isEditable && selectionManager.hasSelection()) {
+        e.preventDefault()
+        const selectedText = selectionManager.getSelection()
+        await clipboardManager.copy(selectedText)
+        if (editableElement.tagName === 'INPUT' || editableElement.tagName === 'TEXTAREA') {
+          const start = editableElement.selectionStart
+          const end = editableElement.selectionEnd
+          editableElement.value = editableElement.value.substring(0, start) + 
+                                 editableElement.value.substring(end)
+          editableElement.selectionStart = editableElement.selectionEnd = start
+          editableElement.dispatchEvent(new Event('input', { bubbles: true }))
+        } else if (editableElement.isContentEditable) {
+          document.execCommand('cut')
+        }
+      }
+      break
+      
+    case 'v':
+      if (isEditable) {
+        const text = await clipboardManager.paste()
+        if (text) {
+          e.preventDefault()
+          if (editableElement.tagName === 'INPUT' || editableElement.tagName === 'TEXTAREA') {
+            const start = editableElement.selectionStart
+            const end = editableElement.selectionEnd
+            editableElement.value = editableElement.value.substring(0, start) + 
+                                   text + 
+                                   editableElement.value.substring(end)
+            editableElement.selectionStart = editableElement.selectionEnd = start + text.length
+            editableElement.dispatchEvent(new Event('input', { bubbles: true }))
+          } else if (editableElement.isContentEditable) {
+            document.execCommand('insertText', false, text)
+          }
+        }
+      }
+      break
+      
+    case 'a':
+      if (isEditable) {
+        e.preventDefault()
+        selectionManager.selectAll(editableElement)
+      } else {
+        e.preventDefault()
+        selectionManager.selectAll()
+      }
+      break
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeyDown)
+})
 </script>
 
 <style scoped>
@@ -237,6 +398,10 @@ const handleIconDoubleClick = (icon) => {
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
 }
 
 .desktop-icon {
